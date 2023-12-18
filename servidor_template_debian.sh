@@ -6,7 +6,7 @@
 # pelo uso desse script.
 # Autor: Marcelo Gondim - gondim at gmail.com
 # Data: 21/01/2023
-# Versao: 1.4.1
+# Versao: 2.0
 #
 # servidor_template.sh is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -41,12 +41,19 @@ MSMTP_PASS=""
 
 # Por padrao colocaremos o apparmor em complain mode. Caso queira manter o default em enforced mudar para APPARMOR="Y"
 APPARMOR="N"
+
+# A variavel mitigations do kernel, mitiga as vulnerabilidades dos processadores. Se você tem um ambiente bare metal ou virtualizado e sob controle, pode
+# manter como "off" para ganhar performance em detrimento a seguranca. Caso contrario altere o valor para: "auto"
+MITIGATIONS="off"
+
 LANG="pt_BR.UTF-8"
 LANGUAGE="pt_BR.UTF-8:pt:en"
 DISTRO_NAME="`lsb_release -s -c`"
 # Para listar os timezones disponiveis execute: timedatectl list-timezones
 TIMEZONE="UTC"
 
+# Habilita fail2ban?
+F2B_ENABLE="Y"
 # Coloque nessa lista usando espacos os IPs que o fail2ban nao podera bloquear.
 # Adicione pelo menos o IP do servidor, IP do gateway, o seu DNS e o IP ou rede que voce
 # usara para acessar esse servidor.
@@ -74,12 +81,21 @@ if [ "$HOSTNAME" == "" ]; then
 fi
 
 echo -e "Configurando repositorios APT em /etc/apt/sources.list..."
-cat << EOF > /etc/apt/sources.list
+if [ "$DISTRO_NAME" == "bookworm" ]; then
+    cat << EOF > /etc/apt/sources.list
+deb http://security.debian.org/debian-security $DISTRO_NAME-security main contrib non-free non-free-firmware
+deb http://deb.debian.org/debian $DISTRO_NAME main contrib non-free non-free-firmware
+deb http://deb.debian.org/debian $DISTRO_NAME-updates main contrib non-free non-free-firmware
+deb http://deb.debian.org/debian $DISTRO_NAME-backports main contrib non-free non-free-firmware
+EOF
+else
+    cat << EOF > /etc/apt/sources.list
 deb http://security.debian.org/debian-security $DISTRO_NAME-security main contrib non-free
 deb http://deb.debian.org/debian $DISTRO_NAME main non-free contrib
 deb http://deb.debian.org/debian $DISTRO_NAME-updates main contrib non-free
 deb http://deb.debian.org/debian $DISTRO_NAME-backports main contrib non-free
 EOF
+fi
 
 echo -e "Configurando /etc/hostname..."
 echo "$HOSTNAME" > /etc/hostname
@@ -97,24 +113,211 @@ ff02::2 ip6-allrouters
 EOF
 
 echo -e "Atualizando o sistema e instalando alguns pacotes uteis..."
-apt-get update && apt-get -y full-upgrade && apt-get -y install neofetch net-tools nftables htop iotop sipcalc tcpdump vim-nox curl gnupg rsync wget host dnsutils mtr-tiny bmon sudo expect tmux whois ethtool dnstop apparmor-utils
+apt-get update && apt-get -y full-upgrade && apt-get -y install neofetch net-tools nftables htop iotop sipcalc tcpdump vim-nox curl gnupg rsync wget host dnsutils mtr-tiny bmon sudo expect tmux whois ethtool dnstop apparmor-utils openssl openssh-client openssh-server iproute2 nmap ncdu bind9utils conntrack psmisc uuid uuid-runtime fping zstd 
 echo "syntax on" > /root/.vimrc
 
-echo -e "Adicionando algumas configuracoes em /etc/sysctl.d/local.conf..."
-cat << EOF > /etc/sysctl.d/local.conf
-net.core.rmem_max = 2147483647
-net.core.wmem_max = 2147483647
-net.ipv4.tcp_rmem = 4096 87380 2147483647
-net.ipv4.tcp_wmem = 4096 65536 2147483647
-net.netfilter.nf_conntrack_buckets = 512000
-net.netfilter.nf_conntrack_max = 4096000
-vm.swappiness=10
+# Agradecimento a Patrick Brandao pelos tunings http://patrickbrandao.com/
+echo -e "Adicionando algumas configuracoes em /etc/sysctl.d/..."
+cat << EOF > /etc/sysctl.d/051-net-core.conf
+net.core.rmem_default=31457280
+net.core.wmem_default=31457280
+net.core.rmem_max=134217728
+net.core.wmem_max=134217728
+net.core.netdev_max_backlog=250000
+net.core.optmem_max=33554432
+net.core.default_qdisc=fq
+net.core.somaxconn=4096
+EOF
+ 
+cat << EOF > /etc/sysctl.d/052-net-tcp-ipv4.conf
+net.ipv4.tcp_sack=1
+net.ipv4.tcp_timestamps=1
+net.ipv4.tcp_low_latency=1
+net.ipv4.tcp_max_syn_backlog=8192
+net.ipv4.tcp_rmem = 4096 87380 67108864
+net.ipv4.tcp_wmem = 4096 65536 67108864
+net.ipv4.tcp_mem = 6672016 6682016 7185248
+net.ipv4.tcp_congestion_control=htcp
+net.ipv4.tcp_mtu_probing=1
+net.ipv4.tcp_moderate_rcvbuf=1
+net.ipv4.tcp_no_metrics_save=1
+EOF
+ 
+cat << EOF > /etc/sysctl.d/056-port-range-ipv4.conf
+net.ipv4.ip_local_port_range=1024 65535
+EOF
+ 
+cat << EOF > /etc/sysctl.d/062-default-ttl-ipv4.conf
+net.ipv4.ip_default_ttl=128
+EOF
+ 
+cat << EOF > /etc/sysctl.d/063-neigh-ipv4.conf
+net.ipv4.neigh.default.gc_interval = 30
+net.ipv4.neigh.default.gc_stale_time = 60
+net.ipv4.neigh.default.gc_thresh1 = 4096
+net.ipv4.neigh.default.gc_thresh2 = 8192
+net.ipv4.neigh.default.gc_thresh3 = 12288
+ 
+net.ipv4.ipfrag_high_thresh=4194304
+net.ipv4.ipfrag_low_thresh=3145728
+net.ipv4.ipfrag_max_dist=64
+net.ipv4.ipfrag_secret_interval=0
+net.ipv4.ipfrag_time=30
+EOF
+ 
+cat << EOF > /etc/sysctl.d/064-neigh-ipv6.conf
+net.ipv6.neigh.default.gc_interval = 30
+net.ipv6.neigh.default.gc_stale_time = 60
+net.ipv6.neigh.default.gc_thresh1 = 4096
+net.ipv6.neigh.default.gc_thresh2 = 8192
+net.ipv6.neigh.default.gc_thresh3 = 12288
+ 
+net.ipv6.ip6frag_high_thresh=4194304
+net.ipv6.ip6frag_low_thresh=3145728
+net.ipv6.ip6frag_secret_interval=0
+net.ipv6.ip6frag_time=60
+EOF
+ 
+cat << EOF > /etc/sysctl.d/065-default-foward-ipv4.conf
+net.ipv4.conf.default.forwarding=1
+EOF
+ 
+cat << EOF > /etc/sysctl.d/066-default-foward-ipv6.conf
+net.ipv6.conf.default.forwarding=1
+EOF
+ 
+cat << EOF > /etc/sysctl.d/067-all-foward-ipv4.conf
+net.ipv4.conf.all.forwarding=1
+EOF
+ 
+cat << EOF > /etc/sysctl.d/068-all-foward-ipv6.conf
+net.ipv6.conf.all.forwarding=1
+EOF
+ 
+cat << EOF > /etc/sysctl.d/069-ipv4-forward.conf
+net.ipv4.ip_forward=1
+EOF
+ 
+cat << EOF > /etc/sysctl.d/072-fs-options.conf
+fs.file-max = 3263776
+fs.aio-max-nr=3263776
+fs.mount-max=1048576
+fs.mqueue.msg_max=128
+fs.mqueue.msgsize_max=131072
+fs.mqueue.queues_max=4096
+fs.pipe-max-size=8388608
+EOF
+ 
+cat << EOF > /etc/sysctl.d/073-swappiness.conf 
+vm.swappiness=1
+EOF
+ 
+cat << EOF > /etc/sysctl.d/074-vfs-cache-pressure.conf
+vm.vfs_cache_pressure=50
+EOF
+ 
+cat << EOF > /etc/sysctl.d/081-kernel-panic.conf
+kernel.panic=3
+EOF
+ 
+cat << EOF > /etc/sysctl.d/082-kernel-threads.conf
+kernel.threads-max=1031306
+EOF
+ 
+cat << EOF > /etc/sysctl.d/083-kernel-pid.conf
+kernel.pid_max=262144
+EOF
+ 
+cat << EOF > /etc/sysctl.d/084-kernel-msgmax.conf
+kernel.msgmax=327680
+EOF
+ 
+cat << EOF > /etc/sysctl.d/085-kernel-msgmnb.conf
+kernel.msgmnb=655360
+EOF
+ 
+cat << EOF > /etc/sysctl.d/086-kernel-msgmni.conf
+kernel.msgmni=32768
+EOF
+ 
+cat << EOF > /etc/sysctl.d/087-kernel-free-min-kb.conf
+vm.min_free_kbytes = 32768
+EOF
+
+cat << EOF > /etc/sysctl.d/090-netfilter-max.conf
+net.nf_conntrack_max=8000000
+EOF
+
+cat << EOF > /etc/sysctl.d/091-netfilter-generic.conf
+net.netfilter.nf_conntrack_buckets=262144
+net.netfilter.nf_conntrack_checksum=1
+net.netfilter.nf_conntrack_events=1
+net.netfilter.nf_conntrack_expect_max=1024
+net.netfilter.nf_conntrack_timestamp=0
+EOF
+
+cat << EOF > /etc/sysctl.d/093-netfilter-icmp.conf
+net.netfilter.nf_conntrack_icmp_timeout=30
+net.netfilter.nf_conntrack_icmpv6_timeout=30
+EOF
+
+cat << EOF > /etc/sysctl.d/094-netfilter-tcp.conf
+net.netfilter.nf_conntrack_tcp_be_liberal=0
+net.netfilter.nf_conntrack_tcp_loose=1
+net.netfilter.nf_conntrack_tcp_max_retrans=3
+net.netfilter.nf_conntrack_tcp_timeout_close=10
+net.netfilter.nf_conntrack_tcp_timeout_close_wait=10
+net.netfilter.nf_conntrack_tcp_timeout_established=600
+net.netfilter.nf_conntrack_tcp_timeout_fin_wait=10
+net.netfilter.nf_conntrack_tcp_timeout_last_ack=10
+net.netfilter.nf_conntrack_tcp_timeout_max_retrans=60
+net.netfilter.nf_conntrack_tcp_timeout_syn_recv=5
+net.netfilter.nf_conntrack_tcp_timeout_syn_sent=5
+net.netfilter.nf_conntrack_tcp_timeout_time_wait=30
+net.netfilter.nf_conntrack_tcp_timeout_unacknowledged=300
+EOF
+
+cat << EOF > /etc/sysctl.d/095-netfilter-udp.conf
+net.netfilter.nf_conntrack_udp_timeout=30
+net.netfilter.nf_conntrack_udp_timeout_stream=180
+EOF
+
+cat << EOF > /etc/sysctl.d/096-netfilter-sctp.conf
+net.netfilter.nf_conntrack_sctp_timeout_closed=10
+net.netfilter.nf_conntrack_sctp_timeout_cookie_echoed=3
+net.netfilter.nf_conntrack_sctp_timeout_cookie_wait=3
+net.netfilter.nf_conntrack_sctp_timeout_established=432000
+net.netfilter.nf_conntrack_sctp_timeout_heartbeat_acked=210
+net.netfilter.nf_conntrack_sctp_timeout_heartbeat_sent=30
+net.netfilter.nf_conntrack_sctp_timeout_shutdown_ack_sent=3
+net.netfilter.nf_conntrack_sctp_timeout_shutdown_recd=0
+net.netfilter.nf_conntrack_sctp_timeout_shutdown_sent=0
+EOF
+
+cat << EOF > /etc/sysctl.d/097-netfilter-dccp.conf
+net.netfilter.nf_conntrack_dccp_loose=1
+net.netfilter.nf_conntrack_dccp_timeout_closereq=64
+net.netfilter.nf_conntrack_dccp_timeout_closing=64
+net.netfilter.nf_conntrack_dccp_timeout_open=43200
+net.netfilter.nf_conntrack_dccp_timeout_partopen=480
+net.netfilter.nf_conntrack_dccp_timeout_request=240
+net.netfilter.nf_conntrack_dccp_timeout_respond=480
+net.netfilter.nf_conntrack_dccp_timeout_timewait=240
+EOF
+
+cat << EOF > /etc/sysctl.d/099-netfilter-ipv6.conf
+net.netfilter.nf_conntrack_frag6_high_thresh=4194304
+net.netfilter.nf_conntrack_frag6_low_thresh=3145728
+net.netfilter.nf_conntrack_frag6_timeout=60
+EOF
+
+cat << EOF > /etc/sysctl.d/100-fs-inotify.conf
 fs.inotify.max_user_watches=524288
 EOF
 
-echo nf_conntrack > /etc/modules
+echo nf_conntrack > /etc/modules-load.d/conntrack.conf
 modprobe nf_conntrack
-sysctl -p /etc/sysctl.d/local.conf
+sysctl --system
 
 # Agradecimentos ao Kretcheu pelo script dele gerador de PS1: https://github.com/kretcheu/devel/blob/master/prompt
 echo -e "Modificando o prompt (PS1) do bash..."
@@ -258,11 +461,12 @@ crontab -u root /var/spool/cron/crontabs/root
 chattr +i /var/spool/cron/crontabs/root
 systemctl restart iwatch.service
 
-echo -e "Instalando o fail2ban..."
-apt-get -y install fail2ban bind9-utils
+if [ "$F2B_ENABLE" == "Y" -o "$F2B_ENABLE" == "y" ]; then
+   echo -e "Instalando o fail2ban..."
+   apt-get -y install fail2ban bind9-utils
 
-if [ "$F2B_XARF" == "Y" ]; then
-   cat << EOF > /etc/fail2ban/jail.local
+   if [ "$F2B_XARF" == "Y" -o "$F2B_XARF" == "y" ]; then
+      cat << EOF > /etc/fail2ban/jail.local
 [DEFAULT]
 ignoreip = $F2B_IGNOREIP
 bantime  = $F2B_BANTIME
@@ -277,8 +481,8 @@ action = %(action_xarf)s
 [sshd]
 enabled = true
 EOF
-else
-   cat << EOF > /etc/fail2ban/jail.local
+   else
+      cat << EOF > /etc/fail2ban/jail.local
 [DEFAULT]
 ignoreip = $F2B_IGNOREIP
 bantime  = $F2B_BANTIME
@@ -293,9 +497,9 @@ action = %(action_)s
 [sshd]
 enabled = true
 EOF
-fi
+   fi
 
-cat << EOF > /etc/fail2ban/action.d/route.local
+   cat << EOF > /etc/fail2ban/action.d/route.local
 # Fail2Ban configuration file
 #
 # Author: Michael Gebetsroither
@@ -327,12 +531,18 @@ actionstop =
 blocktype = blackhole
 EOF
 
-systemctl enable fail2ban.service
-systemctl restart fail2ban.service
+   systemctl enable fail2ban.service
+   systemctl restart fail2ban.service
+
+fi
 
 if [ "$APPARMOR" == "N" -o "$APPARMOR" == "n" ]; then
-   echo -e "Colocando o APPARMOR em complain mode..."
-   aa-complain /etc/apparmor.d/*
+   echo -e "Removendo o APPARMOR..."
+   mkdir -p /etc/default/grub.d
+   cat << EOF > /etc/default/grub.d/apparmor.cfg
+GRUB_CMDLINE_LINUX_DEFAULT="\$GRUB_CMDLINE_LINUX_DEFAULT mitigations=$MITIGATIONS apparmor=0"
+EOF
+   update-grub
 fi
 
 echo -e "Setando timezone para $TIMEZONE..."
