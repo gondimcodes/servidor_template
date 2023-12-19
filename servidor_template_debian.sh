@@ -6,7 +6,7 @@
 # pelo uso desse script.
 # Autor: Marcelo Gondim - gondim at gmail.com
 # Data: 21/01/2023
-# Versao: 2.0
+# Versao: 2.1
 #
 # servidor_template.sh is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -39,8 +39,9 @@ MSMTP_HOST=""
 MSMTP_USER=""
 MSMTP_PASS=""
 
-# Por padrao colocaremos o apparmor em complain mode. Caso queira manter o default em enforced mudar para APPARMOR="Y"
-APPARMOR="N"
+# Por padrao o apparmor sera removido para ajustes. Para habilitar basta alterar a variavel para apparmor=1 do arquivo /etc/default/grub.d/apparmor.cfg, savar, executar
+# update-grub e fazer um reboot. Caso não queira remover e manter o default em enforced mudar para APPARMOR="1".
+APPARMOR="0"
 
 # A variavel mitigations do kernel, mitiga as vulnerabilidades dos processadores. Se você tem um ambiente bare metal ou virtualizado e sob controle, pode
 # manter como "off" para ganhar performance em detrimento a seguranca. Caso contrario altere o valor para: "auto"
@@ -536,14 +537,12 @@ EOF
 
 fi
 
-if [ "$APPARMOR" == "N" -o "$APPARMOR" == "n" ]; then
-   echo -e "Removendo o APPARMOR..."
-   mkdir -p /etc/default/grub.d
-   cat << EOF > /etc/default/grub.d/apparmor.cfg
-GRUB_CMDLINE_LINUX_DEFAULT="\$GRUB_CMDLINE_LINUX_DEFAULT mitigations=$MITIGATIONS apparmor=0"
+echo -e "Ajustando o APPARMOR e MITIGATIONS conforme escolhido..."
+mkdir -p /etc/default/grub.d
+cat << EOF > /etc/default/grub.d/apparmor.cfg
+GRUB_CMDLINE_LINUX_DEFAULT="\$GRUB_CMDLINE_LINUX_DEFAULT mitigations=$MITIGATIONS apparmor=$APPARMOR"
 EOF
-   update-grub
-fi
+update-grub
 
 echo -e "Setando timezone para $TIMEZONE..."
 timedatectl set-timezone "$TIMEZONE"
