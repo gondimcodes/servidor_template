@@ -6,7 +6,7 @@
 # pelo uso desse script.
 # Autor: Marcelo Gondim - gondim at gmail.com
 # Data: 21/01/2023
-# Versao: 2.1
+# Versao: 2.2
 #
 # servidor_template.sh is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -114,7 +114,7 @@ ff02::2 ip6-allrouters
 EOF
 
 echo -e "Atualizando o sistema e instalando alguns pacotes uteis..."
-apt-get update && apt-get -y full-upgrade && apt-get -y install neofetch net-tools nftables htop iotop sipcalc tcpdump vim-nox curl gnupg rsync wget host dnsutils mtr-tiny bmon sudo expect tmux whois ethtool dnstop apparmor-utils openssl openssh-client openssh-server iproute2 nmap ncdu bind9utils conntrack psmisc uuid uuid-runtime fping zstd 
+apt-get update && apt-get -y full-upgrade && apt-get -y install neofetch net-tools nftables htop iotop sipcalc tcpdump vim-nox curl gnupg rsync wget host dnsutils mtr-tiny bmon sudo expect tmux whois ethtool dnstop apparmor-utils openssl openssh-client openssh-server iproute2 nmap ncdu bind9utils conntrack psmisc uuid uuid-runtime fping zstd rsyslog 
 echo "syntax on" > /root/.vimrc
 
 # Agradecimento a Patrick Brandao pelos tunings http://patrickbrandao.com/
