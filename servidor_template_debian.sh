@@ -210,7 +210,7 @@ fs.pipe-max-size=8388608
 EOF
  
 cat << EOF > /etc/sysctl.d/073-swappiness.conf 
-vm.swappiness=10
+vm.swappiness=1
 EOF
  
 cat << EOF > /etc/sysctl.d/074-vfs-cache-pressure.conf
