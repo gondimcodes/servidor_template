@@ -380,10 +380,6 @@ MailFrom = $MSMTP_FROM
 Detail = 5
 EOF
 
-echo -e "Instalando IRQBalance..."
-apt-get -y install irqbalance
-systemctl enable irqbalance
-
 echo -e "Instalando o chrony para atualizacao de data e hora do sistema..."
 apt-get -y install chrony
 
