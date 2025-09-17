@@ -6,7 +6,7 @@
 # pelo uso desse script.
 # Autor: Marcelo Gondim - gondim at gmail.com
 # Data: 21/01/2023
-# Versao: 2.2
+# Versao: 3.0
 #
 # servidor_template.sh is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,7 +21,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
-
+ 
 # Variaveis de configuracao:
 # E-mail para envio de logs do sistema via logwatch
 EMAIL_LOGS=""
@@ -38,21 +38,21 @@ MSMTP_FROM=""
 MSMTP_HOST=""
 MSMTP_USER=""
 MSMTP_PASS=""
-
+ 
 # Por padrao o apparmor sera removido para ajustes. Para habilitar basta alterar a variavel para apparmor=1 do arquivo /etc/default/grub.d/apparmor.cfg, savar, executar
 # update-grub e fazer um reboot. Caso não queira remover e manter o default em enforced mudar para APPARMOR="1".
 APPARMOR="0"
-
+ 
 # A variavel mitigations do kernel, mitiga as vulnerabilidades dos processadores. Se você tem um ambiente bare metal ou virtualizado e sob controle, pode
 # manter como "off" para ganhar performance em detrimento a seguranca. Caso contrario altere o valor para: "auto"
 MITIGATIONS="off"
-
+ 
 LANG="pt_BR.UTF-8"
 LANGUAGE="pt_BR.UTF-8:pt:en"
 DISTRO_NAME="`lsb_release -s -c`"
 # Para listar os timezones disponiveis execute: timedatectl list-timezones
 TIMEZONE="UTC"
-
+ 
 # Habilita fail2ban?
 F2B_ENABLE="Y"
 # Coloque nessa lista usando espacos os IPs que o fail2ban nao podera bloquear.
@@ -65,58 +65,66 @@ F2B_BANTIME="72h"
 F2B_MAXRETRY="5"
 # Notifica os contatos responsaveis dos IPs que foram banidos. Caso so queira bloquear, mude para N.
 F2B_XARF="Y"
-
+ 
 if [ "$EMAIL_LOGS" == "" -o "$EMAIL_UPGRADES" == "" ]; then
    echo -e "\nVariaveis de EMAIL vazias!"
    exit
 fi
-
+ 
 if [ "$MSMTP_FROM" == "" ]; then
    echo -e "\nVariavel MSMTP_FROM vazia!"
    exit
 fi
-
+ 
 if [ "$HOSTNAME" == "" ]; then
    echo -e "\nVariavel HOSTNAME vazia!"
    exit
 fi
-
+ 
 echo -e "Configurando repositorios APT em /etc/apt/sources.list..."
-if [ "$DISTRO_NAME" == "bookworm" ]; then
-    cat << EOF > /etc/apt/sources.list
-deb http://security.debian.org/debian-security $DISTRO_NAME-security main contrib non-free non-free-firmware
-deb http://deb.debian.org/debian $DISTRO_NAME main contrib non-free non-free-firmware
-deb http://deb.debian.org/debian $DISTRO_NAME-updates main contrib non-free non-free-firmware
-deb http://deb.debian.org/debian $DISTRO_NAME-backports main contrib non-free non-free-firmware
+if [ "$DISTRO_NAME" == "bookworm" -o "$DISTRO_NAME" == "trixie" ]; then
+    cat << EOF > /etc/apt/sources.list.d/debian.sources
+Types: deb
+URIs: https://deb.debian.org/debian
+Suites: $DISTRO_NAME $DISTRO_NAME-updates $DISTRO_NAME-backports
+Components: main non-free non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+ 
+Types: deb
+URIs: https://security.debian.org/debian-security
+Suites: $DISTRO_NAME-security
+Components: main non-free non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 EOF
+rm /etc/apt/sources.list
 else
-    cat << EOF > /etc/apt/sources.list
-deb http://security.debian.org/debian-security $DISTRO_NAME-security main contrib non-free
-deb http://deb.debian.org/debian $DISTRO_NAME main non-free contrib
-deb http://deb.debian.org/debian $DISTRO_NAME-updates main contrib non-free
-deb http://deb.debian.org/debian $DISTRO_NAME-backports main contrib non-free
-EOF
+    echo -e "\nDistro errada!!! Rode apenas no Debian 12 (Bookworm) ou Debian 13 (Trixie)!"
+    exit
 fi
-
+ 
 echo -e "Configurando /etc/hostname..."
 echo "$HOSTNAME" > /etc/hostname
 hostname -F /etc/hostname
-
+ 
 echo -e "Configurando /etc/hosts..."
 cat << EOF > /etc/hosts
 127.0.0.1       localhost
 127.0.1.1       $HOSTNAME
-
+ 
 # The following lines are desirable for IPv6 capable hosts
 ::1     localhost ip6-localhost ip6-loopback
 ff02::1 ip6-allnodes
 ff02::2 ip6-allrouters
 EOF
-
+ 
 echo -e "Atualizando o sistema e instalando alguns pacotes uteis..."
-apt-get update && apt-get -y full-upgrade && apt-get -y install neofetch net-tools nftables htop iotop sipcalc tcpdump vim-nox curl gnupg rsync wget host dnsutils mtr-tiny bmon sudo expect tmux whois ethtool dnstop apparmor-utils openssl openssh-client openssh-server iproute2 nmap ncdu bind9utils conntrack psmisc uuid uuid-runtime fping zstd rsyslog 
+if [ "$DISTRO_NAME" == "bookworm" ]; then
+    apt-get update && apt-get -y full-upgrade && apt-get -y install neofetch net-tools nftables htop iotop sipcalc tcpdump vim-nox curl gnupg rsync wget host dnsutils mtr-tiny bmon sudo expect tmux whois ethtool dnstop apparmor-utils openssl openssh-client openssh-server iproute2 nmap ncdu bind9utils conntrack psmisc uuid uuid-runtime fping zstd rsyslog
+else
+    apt-get update && apt-get -y full-upgrade && apt-get -y install net-tools nftables htop iotop sipcalc tcpdump vim-nox curl gnupg rsync wget bind9-host bind9-dnsutils mtr-tiny bmon sudo expect tmux whois ethtool dnstop apparmor-utils openssl openssh-client openssh-server iproute2 nmap ncdu bind9-utils conntrack psmisc uuid uuid-runtime fping zstd rsyslog
+fi 
 echo "syntax on" > /root/.vimrc
-
+ 
 # Agradecimento a Patrick Brandao pelos tunings http://patrickbrandao.com/
 echo -e "Adicionando algumas configuracoes em /etc/sysctl.d/..."
 cat << EOF > /etc/sysctl.d/051-net-core.conf
@@ -244,11 +252,11 @@ EOF
 cat << EOF > /etc/sysctl.d/087-kernel-free-min-kb.conf
 vm.min_free_kbytes = 32768
 EOF
-
+ 
 cat << EOF > /etc/sysctl.d/090-netfilter-max.conf
 net.nf_conntrack_max=8000000
 EOF
-
+ 
 cat << EOF > /etc/sysctl.d/091-netfilter-generic.conf
 net.netfilter.nf_conntrack_buckets=262144
 net.netfilter.nf_conntrack_checksum=1
@@ -256,12 +264,12 @@ net.netfilter.nf_conntrack_events=1
 net.netfilter.nf_conntrack_expect_max=1024
 net.netfilter.nf_conntrack_timestamp=0
 EOF
-
+ 
 cat << EOF > /etc/sysctl.d/093-netfilter-icmp.conf
 net.netfilter.nf_conntrack_icmp_timeout=30
 net.netfilter.nf_conntrack_icmpv6_timeout=30
 EOF
-
+ 
 cat << EOF > /etc/sysctl.d/094-netfilter-tcp.conf
 net.netfilter.nf_conntrack_tcp_be_liberal=0
 net.netfilter.nf_conntrack_tcp_loose=1
@@ -277,12 +285,12 @@ net.netfilter.nf_conntrack_tcp_timeout_syn_sent=5
 net.netfilter.nf_conntrack_tcp_timeout_time_wait=30
 net.netfilter.nf_conntrack_tcp_timeout_unacknowledged=300
 EOF
-
+ 
 cat << EOF > /etc/sysctl.d/095-netfilter-udp.conf
 net.netfilter.nf_conntrack_udp_timeout=30
 net.netfilter.nf_conntrack_udp_timeout_stream=180
 EOF
-
+ 
 cat << EOF > /etc/sysctl.d/096-netfilter-sctp.conf
 net.netfilter.nf_conntrack_sctp_timeout_closed=10
 net.netfilter.nf_conntrack_sctp_timeout_cookie_echoed=3
@@ -294,7 +302,7 @@ net.netfilter.nf_conntrack_sctp_timeout_shutdown_ack_sent=3
 net.netfilter.nf_conntrack_sctp_timeout_shutdown_recd=0
 net.netfilter.nf_conntrack_sctp_timeout_shutdown_sent=0
 EOF
-
+ 
 cat << EOF > /etc/sysctl.d/097-netfilter-dccp.conf
 net.netfilter.nf_conntrack_dccp_loose=1
 net.netfilter.nf_conntrack_dccp_timeout_closereq=64
@@ -305,32 +313,32 @@ net.netfilter.nf_conntrack_dccp_timeout_request=240
 net.netfilter.nf_conntrack_dccp_timeout_respond=480
 net.netfilter.nf_conntrack_dccp_timeout_timewait=240
 EOF
-
+ 
 cat << EOF > /etc/sysctl.d/099-netfilter-ipv6.conf
 net.netfilter.nf_conntrack_frag6_high_thresh=4194304
 net.netfilter.nf_conntrack_frag6_low_thresh=3145728
 net.netfilter.nf_conntrack_frag6_timeout=60
 EOF
-
+ 
 cat << EOF > /etc/sysctl.d/100-fs-inotify.conf
 fs.inotify.max_user_watches=524288
 EOF
-
+ 
 echo nf_conntrack > /etc/modules-load.d/conntrack.conf
 modprobe nf_conntrack
 sysctl --system
-
+ 
 # Agradecimentos ao Kretcheu pelo script dele gerador de PS1: https://github.com/kretcheu/devel/blob/master/prompt
 echo -e "Modificando o prompt (PS1) do bash..."
 cat << EOF > /root/.bash_profile
 PS1='\[\e[1;34m\]\342\224\214\342\224\200\[\e[1;34m\][\[\e[1;36m\]\u\[\e[1;33m\]@\[\e[1;37m\]\h\[\e[1;34m\]]\[\e[1;34m\]\342\224\200\[\e[1;34m\][\[\e[1;33m\]\w\[\e[1;34m\]]\[\e[1;34m\]\342\224\200[\[\e[1;37m\]\t\[\e[1;34m\]]\n\[\e[1;34m\]\342\224\224\342\224\200\342\224\200\342\225\274\[\e[1;32m\] # \[\e[0m\]'
-
+ 
 alias l="ls -la --color=auto"
 alias rm="rm -i"
 alias mv="mv -i"
 alias cp="cp -i"
 EOF
-
+ 
 if [ "$MTA" == "N" -o "$MTA" == "n" ]; then
    echo -e "Instalando sistema para envio de e-mails de notificacao..."
    apt-get -y install msmtp msmtp-mta bsd-mailx
@@ -340,7 +348,7 @@ defaults
         port 587
         tls on
         tls_trust_file /etc/ssl/certs/ca-certificates.crt
-
+ 
 account notificacoes
         protocol smtp
         host $MSMTP_HOST
@@ -348,17 +356,17 @@ account notificacoes
         auth login
         user $MSMTP_USER
         password $MSMTP_PASS
-
+ 
 # Set a default account
 account default : notificacoes
 EOF
    echo -e "Enviando e-mail de teste..."
    echo "Teste de envio de e-mail!" | mailx -s $HOSTNAME $EMAIL_LOGS
 fi
-
+ 
 echo -e "Instalando apticron e logwatch..."
 apt-get -y install apticron logwatch
-
+ 
 cat << EOF > /etc/apticron/apticron.conf
 EMAIL="$EMAIL_UPGRADES"
 DIFF_ONLY="0"
@@ -372,17 +380,17 @@ NOTIFY_NEW="1"
 NOTIFY_NO_UPDATES="0"
 GPG_ENCRYPT="0"
 EOF
-
+ 
 cat << EOF > /etc/logwatch/conf/logwatch.conf
 Output = mail
 MailTo = $EMAIL_LOGS
 MailFrom = $MSMTP_FROM
 Detail = 5
 EOF
-
+ 
 echo -e "Instalando o chrony para atualizacao de data e hora do sistema..."
 apt-get -y install chrony
-
+ 
 cat << EOF > /etc/chrony/chrony.conf
 confdir /etc/chrony/conf.d
 sourcedir /run/chrony-dhcp
@@ -396,23 +404,23 @@ rtcsync
 makestep 1 3
 leapsectz right/UTC
 EOF
-
+ 
 cat << EOF > /etc/chrony/sources.d/nic.sources
 server a.st1.ntp.br iburst nts
 server b.st1.ntp.br iburst nts
 server c.st1.ntp.br iburst nts
 server d.st1.ntp.br iburst nts
 EOF
-
+ 
 systemctl restart chronyd.service
-
+ 
 echo -e "Instalando o iWatch para monitorar integridade do File System..."
 apt-get -y install iwatch
-
+ 
 cat << EOF > /etc/iwatch/iwatch.xml
 <?xml version="1.0" ?>
 <!DOCTYPE config SYSTEM "/etc/iwatch/iwatch.dtd" >
-
+ 
 <config charset="utf-8">
   <guard email="$EMAIL_LOGS" name="iWatch"/>
   <watchlist>
@@ -425,7 +433,7 @@ cat << EOF > /etc/iwatch/iwatch.xml
   </watchlist>
 </config>
 EOF
-
+ 
 chattr -i /var/spool/cron/crontabs/root
 cat << EOF > /var/spool/cron/crontabs/root
 # Edit this file to introduce tasks to be run by cron.
@@ -457,11 +465,11 @@ EOF
 crontab -u root /var/spool/cron/crontabs/root
 chattr +i /var/spool/cron/crontabs/root
 systemctl restart iwatch.service
-
+ 
 if [ "$F2B_ENABLE" == "Y" -o "$F2B_ENABLE" == "y" ]; then
    echo -e "Instalando o fail2ban..."
    apt-get -y install fail2ban bind9-utils
-
+ 
    if [ "$F2B_XARF" == "Y" -o "$F2B_XARF" == "y" ]; then
       cat << EOF > /etc/fail2ban/jail.local
 [DEFAULT]
@@ -474,7 +482,7 @@ banaction_allports = route
 sender = $MSMTP_FROM
 mta = sendmail
 action = %(action_xarf)s
-
+ 
 [sshd]
 enabled = true
 EOF
@@ -490,12 +498,12 @@ banaction_allports = route
 sender = $MSMTP_FROM
 mta = sendmail
 action = %(action_)s
-
+ 
 [sshd]
 enabled = true
 EOF
    fi
-
+ 
    cat << EOF > /etc/fail2ban/action.d/route.local
 # Fail2Ban configuration file
 #
@@ -512,38 +520,38 @@ EOF
 #
 # CON:
 #   - Blocking is per IP and NOT per service, but ideal as action against ssh password bruteforcing hosts
-
+ 
 [Definition]
 actionban   = ip route add <blocktype> <ip>
 actionunban = ip route del <blocktype> <ip>
 actioncheck =
 actionstart =
 actionstop =
-
+ 
 [Init]
-
+ 
 # Option:  blocktype
 # Note:    Type can be blackhole, unreachable and prohibit. Unreachable and prohibit correspond to the ICMP reject messages.
 # Values:  STRING
 blocktype = blackhole
 EOF
-
+ 
    systemctl enable fail2ban.service
    systemctl restart fail2ban.service
-
+ 
 fi
-
+ 
 echo -e "Ajustando o APPARMOR e MITIGATIONS conforme escolhido..."
 mkdir -p /etc/default/grub.d
 cat << EOF > /etc/default/grub.d/apparmor.cfg
 GRUB_CMDLINE_LINUX_DEFAULT="\$GRUB_CMDLINE_LINUX_DEFAULT mitigations=$MITIGATIONS apparmor=$APPARMOR"
 EOF
 update-grub
-
+ 
 echo -e "Setando timezone para $TIMEZONE..."
 timedatectl set-timezone "$TIMEZONE"
-
+ 
 echo -e "Definindo o locales do sistema..."
 localectl set-locale LANG=$LANG LANGUAGE=$LANGUAGE
-
+ 
 echo -e "\nServidor configurado. Reinicie o sistema para validar!"
