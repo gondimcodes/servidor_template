@@ -85,23 +85,36 @@ echo -e "Configurando repositorios APT em /etc/apt/sources.list..."
 if [ "$DISTRO_NAME" == "bookworm" -o "$DISTRO_NAME" == "trixie" ]; then
     cat << EOF > /etc/apt/sources.list.d/debian.sources
 Types: deb
-URIs: https://deb.debian.org/debian
-Suites: $DISTRO_NAME $DISTRO_NAME-updates $DISTRO_NAME-backports
-Components: main non-free non-free-firmware
-Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
- 
-Types: deb
-URIs: https://security.debian.org/debian-security
+URIs: http://security.debian.org/debian-security/
 Suites: $DISTRO_NAME-security
-Components: main non-free non-free-firmware
+Components: main contrib non-free non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+
+Types: deb
+URIs: http://deb.debian.org/debian/
+Suites: $DISTRO_NAME
+Components: main contrib non-free non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+
+Types: deb
+URIs: http://deb.debian.org/debian/
+Suites: $DISTRO_NAME-updates
+Components: main contrib non-free non-free-firmware
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 EOF
-rm /etc/apt/sources.list
+    cat << EOF > /etc/apt/sources.list.d/debian-backports.sources
+Types: deb
+URIs: http://deb.debian.org/debian/
+Suites: $DISTRO_NAME-backports
+Components: main contrib non-free non-free-firmware
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+EOF
+    rm /etc/apt/sources.list
 else
     echo -e "\nDistro errada!!! Rode apenas no Debian 12 (Bookworm) ou Debian 13 (Trixie)!"
     exit
 fi
- 
+
 echo -e "Configurando /etc/hostname..."
 echo "$HOSTNAME" > /etc/hostname
 hostname -F /etc/hostname
