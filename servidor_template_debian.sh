@@ -6,7 +6,7 @@
 # pelo uso desse script.
 # Autor: Marcelo Gondim - gondim at gmail.com
 # Data: 21/01/2023
-# Versao: 3.0
+# Versao: 3.1
 #
 # servidor_template.sh is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -118,6 +118,9 @@ fi
 echo -e "Configurando /etc/hostname..."
 echo "$HOSTNAME" > /etc/hostname
 hostname -F /etc/hostname
+
+echo -e "Configurando data/hora na saida do history..."
+echo 'export HISTTIMEFORMAT="%d/%m/%y %T "' >> ~/.bash_profile
  
 echo -e "Configurando /etc/hosts..."
 cat << EOF > /etc/hosts
