@@ -6,7 +6,7 @@
 # pelo uso desse script.
 # Autor: Marcelo Gondim - gondim at gmail.com
 # Data: 21/01/2023
-# Versao: 3.1
+# Versao: 3.2
 #
 # servidor_template.sh is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -119,9 +119,6 @@ echo -e "Configurando /etc/hostname..."
 echo "$HOSTNAME" > /etc/hostname
 hostname -F /etc/hostname
 
-echo -e "Configurando data/hora na saida do history..."
-echo 'export HISTTIMEFORMAT="%d/%m/%y %T "' >> ~/.bash_profile
- 
 echo -e "Configurando /etc/hosts..."
 cat << EOF > /etc/hosts
 127.0.0.1       localhost
@@ -354,6 +351,9 @@ alias rm="rm -i"
 alias mv="mv -i"
 alias cp="cp -i"
 EOF
+
+echo -e "Configurando data/hora na saida do history..."
+echo 'export HISTTIMEFORMAT="%d/%m/%y %T "' >> ~/.bash_profile
  
 if [ "$MTA" == "N" -o "$MTA" == "n" ]; then
    echo -e "Instalando sistema para envio de e-mails de notificacao..."
